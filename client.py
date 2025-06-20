@@ -5,15 +5,28 @@ from typing import Any, List
 from labrpc.labrpc import ClientEnd
 from server import GetArgs, GetReply, PutAppendArgs, PutAppendReply
 
+
 def nrand() -> int:
     return random.getrandbits(62)
+
 
 class Clerk:
     def __init__(self, servers: List[ClientEnd], cfg):
         self.servers = servers
         self.cfg = cfg
 
-        # Your definitions here.
+    def send(self, op: str, args):
+        replica = 0
+        while True:
+            shard = (ord(args.key[0]) + replica) % self.cfg.nservers
+            replica = (replica + 1) % self.cfg.nreplicas
+            try:
+                reply = self.servers[shard].call(f"KVServer.{op}", args)
+            except TimeoutError:
+                continue
+            if reply is None:
+                raise Exception("Rejected by server.")
+            return reply.value
 
     # Fetch the current value for a key.
     # Returns "" if the key does not exist.
@@ -27,8 +40,9 @@ class Clerk:
     # must match the declared types of the RPC handler function's
     # arguments in server.py.
     def get(self, key: str) -> str:
-        # You will have to modify this function.
-        return ""
+        # You will have to modify this function.d
+        args = GetArgs(key, nrand())
+        return self.send("Get", args)
 
     # Shared by Put and Append.
     #
@@ -41,7 +55,11 @@ class Clerk:
     # arguments in server.py.
     def put_append(self, key: str, value: str, op: str) -> str:
         # You will have to modify this function.
-        return ""
+        if op not in {"Put", "Append"}:
+            raise ValueError('Value must equal "put" or "append".')
+
+        args = PutAppendArgs(key, value, nrand())
+        return self.send(op, args)
 
     def put(self, key: str, value: str):
         self.put_append(key, value, "Put")
